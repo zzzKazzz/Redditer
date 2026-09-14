@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { FeedSortBar } from "@/components/FeedSortBar";
 import { PostList } from "@/components/PostList";
 import {
   getActionStates,
   getAllActions,
+  getViewedPostIds,
   recordView,
   setPreference,
   toggleSave,
@@ -32,17 +33,28 @@ export function FeedPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
+  const [allViewed, setAllViewed] = useState(false);
+  const fetchedPosts = useRef<Post[]>([]);
+  const hiddenViewIds = useRef(new Set<string>());
 
-  const reloadFromDb = useCallback(async (list: Post[]) => {
+  const reloadFromDb = useCallback(async (list?: Post[]) => {
+    if (list) fetchedPosts.current = list;
+    const source = fetchedPosts.current;
     const [actions, states] = await Promise.all([
       getAllActions(),
       getActionStates(),
     ]);
-    setPosts(rankPosts(list, actions));
+    const visible = rankPosts(source, actions).filter(
+      (post) => !hiddenViewIds.current.has(post.id),
+    );
+    setPosts(visible);
     setActionStates(states);
+    setAllViewed(source.length > 0 && visible.length === 0);
   }, []);
 
   useEffect(() => {
+    // localStorage はクライアント専用。初期 HTML とずらさない。
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydrate from storage
     setQuery(readStoredFeedQuery());
     setReady(true);
   }, []);
@@ -55,6 +67,10 @@ export function FeedPage() {
       setRefreshing(true);
       setLoading(true);
       setErrors([]);
+      setAllViewed(false);
+      hiddenViewIds.current = new Set(await getViewedPostIds());
+      if (cancelled) return;
+      await reloadFromDb();
       try {
         const { posts: fetched, errors: nextErrors } =
           await fetchAllSubredditPosts(query, async (batch, batchErrors) => {
@@ -89,35 +105,28 @@ export function FeedPage() {
     (next: FeedQuery) => {
       if (next.sort === query.sort && next.period === query.period) return;
       writeStoredFeedQuery(next);
+      fetchedPosts.current = [];
       setPosts([]);
+      setAllViewed(false);
       setQuery(next);
     },
     [query],
   );
 
-  const handleLike = useCallback(
-    async (postId: string) => {
-      await setPreference(postId, "like");
-      await reloadFromDb(posts);
-    },
-    [posts, reloadFromDb],
-  );
+  const handleLike = useCallback(async (postId: string) => {
+    await setPreference(postId, "like");
+    await reloadFromDb();
+  }, [reloadFromDb]);
 
-  const handleDislike = useCallback(
-    async (postId: string) => {
-      await setPreference(postId, "dislike");
-      await reloadFromDb(posts);
-    },
-    [posts, reloadFromDb],
-  );
+  const handleDislike = useCallback(async (postId: string) => {
+    await setPreference(postId, "dislike");
+    await reloadFromDb();
+  }, [reloadFromDb]);
 
-  const handleSave = useCallback(
-    async (postId: string) => {
-      await toggleSave(postId);
-      await reloadFromDb(posts);
-    },
-    [posts, reloadFromDb],
-  );
+  const handleSave = useCallback(async (postId: string) => {
+    await toggleSave(postId);
+    await reloadFromDb();
+  }, [reloadFromDb]);
 
   const handleView = useCallback(async (postId: string) => {
     await recordView(postId);
@@ -158,7 +167,11 @@ export function FeedPage() {
         <PostList
           posts={posts}
           actionStates={actionStates}
-          emptyMessage="表示できる投稿がまだありません。更新を押してください。"
+          emptyMessage={
+            allViewed
+              ? "既読の投稿を外しました。更新するか、購読を増やしてください。"
+              : "表示できる投稿がまだありません。更新を押してください。"
+          }
           onLike={handleLike}
           onDislike={handleDislike}
           onSave={handleSave}

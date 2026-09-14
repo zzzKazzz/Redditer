@@ -98,6 +98,11 @@ export async function recordView(postId: string): Promise<void> {
   });
 }
 
+export async function getViewedPostIds(): Promise<string[]> {
+  const viewed = await db.userActions.where("action").equals("view").toArray();
+  return viewed.map((row) => row.postId);
+}
+
 export async function getSavedPostIdsNewestFirst(): Promise<string[]> {
   const saved = await db.userActions.where("action").equals("save").toArray();
   saved.sort((a, b) => b.timestamp - a.timestamp);

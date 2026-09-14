@@ -1,4 +1,4 @@
-import { isAllowedSubreddit, SUBREDDITS } from "./subreddits";
+import { isValidSubredditName, readStoredSubreddits } from "./subreddits";
 import { DEFAULT_FEED_QUERY, type FeedQuery } from "./feed";
 import type { Post } from "./types";
 
@@ -223,8 +223,8 @@ export async function fetchSubredditPosts(
   subreddit: string,
   query: FeedQuery = DEFAULT_FEED_QUERY,
 ): Promise<RedditPostPayload[]> {
-  if (!isAllowedSubreddit(subreddit)) {
-    throw new Error(`未対応の subreddit です: ${subreddit}`);
+  if (!isValidSubredditName(subreddit)) {
+    throw new Error(`subreddit 名が正しくありません: ${subreddit}`);
   }
 
   const params = new URLSearchParams({
@@ -257,7 +257,8 @@ export async function fetchAllSubredditPosts(
   const errors: string[] = [];
   const collected: RedditPostPayload[][] = [];
 
-  const groups = await mapPool(SUBREDDITS, FETCH_CONCURRENCY, async (subreddit) => {
+  const subreddits = readStoredSubreddits();
+  const groups = await mapPool(subreddits, FETCH_CONCURRENCY, async (subreddit) => {
     try {
       const batch = await fetchSubredditPosts(subreddit, query);
       collected.push(batch);

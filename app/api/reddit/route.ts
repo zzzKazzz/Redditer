@@ -1,4 +1,4 @@
-import { isAllowedSubreddit } from "@/lib/subreddits";
+import { isValidSubredditName } from "@/lib/subreddits";
 import { parseFeedQuery, redditListingUrl, type FeedQuery } from "@/lib/feed";
 import { normalizeRedditAtom, normalizeRedditListing } from "@/lib/reddit";
 
@@ -68,9 +68,9 @@ export async function GET(request: Request) {
   const subreddit = searchParams.get("subreddit") ?? "";
   const query = parseFeedQuery(searchParams.get("sort"), searchParams.get("t"));
 
-  if (!isAllowedSubreddit(subreddit)) {
+  if (!isValidSubredditName(subreddit)) {
     return Response.json(
-      { error: "未対応の subreddit です" },
+      { error: "subreddit 名が正しくありません" },
       { status: 400 },
     );
   }

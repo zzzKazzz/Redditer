@@ -1,8 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import {
+  useEffect,
+  useState,
+  useSyncExternalStore,
+  type FormEvent,
+} from "react";
 import { getAllActions, getAllPosts } from "@/lib/db";
 import { getInterestSummary } from "@/lib/recommend";
+import {
+  MAX_SUBSCRIPTIONS,
+  addSubscription,
+  getSubredditsServerSnapshot,
+  readStoredSubreddits,
+  removeSubscription,
+  subscribeSubreddits,
+  writeStoredSubreddits,
+} from "@/lib/subreddits";
 
 function WeightList({
   title,
@@ -36,6 +50,88 @@ function WeightList({
           ))}
         </ul>
       )}
+    </section>
+  );
+}
+
+function SubscriptionEditor() {
+  const subreddits = useSyncExternalStore(
+    subscribeSubreddits,
+    readStoredSubreddits,
+    getSubredditsServerSnapshot,
+  );
+  const [draft, setDraft] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  function persist(next: string[]) {
+    writeStoredSubreddits(next);
+    setError(null);
+  }
+
+  function handleAdd(event: FormEvent) {
+    event.preventDefault();
+    const result = addSubscription(subreddits, draft);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    persist(result.list);
+    setDraft("");
+  }
+
+  function handleRemove(name: string) {
+    const result = removeSubscription(subreddits, name);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    persist(result.list);
+  }
+
+  return (
+    <section className="rounded-2xl bg-paper px-4 py-4 shadow-[0_8px_24px_rgba(31,27,22,0.06)]">
+      <h2 className="text-sm font-semibold text-ink">購読中の subreddit</h2>
+      <p className="mt-1 text-xs text-muted">
+        {subreddits.length}/{MAX_SUBSCRIPTIONS} 件。フィードはここから取得します。
+      </p>
+      <ul className="mt-3 flex flex-wrap gap-2">
+        {subreddits.map((name) => (
+          <li key={name}>
+            <span className="inline-flex min-h-12 items-center gap-1 rounded-full bg-accent-soft pl-4 text-sm font-medium text-accent">
+              r/{name}
+              <button
+                type="button"
+                onClick={() => handleRemove(name)}
+                className="inline-flex min-h-12 min-w-12 items-center justify-center rounded-full text-accent"
+                aria-label={`r/${name} の購読をやめる`}
+              >
+                ×
+              </button>
+            </span>
+          </li>
+        ))}
+      </ul>
+      <form onSubmit={handleAdd} className="mt-3 flex gap-2">
+        <input
+          value={draft}
+          onChange={(event) => {
+            setDraft(event.target.value);
+            if (error) setError(null);
+          }}
+          placeholder="AskReddit"
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck={false}
+          className="min-h-12 min-w-0 flex-1 rounded-full bg-sand px-4 text-sm text-ink outline-none placeholder:text-muted"
+        />
+        <button
+          type="submit"
+          className="min-h-12 shrink-0 rounded-full bg-ink px-4 text-sm font-medium text-paper"
+        >
+          追加
+        </button>
+      </form>
+      {error ? <p className="mt-2 text-sm text-amber-800">{error}</p> : null}
     </section>
   );
 }
@@ -74,6 +170,8 @@ export function InterestsPage() {
         </p>
         <h1 className="text-2xl font-semibold tracking-tight">あなたの興味</h1>
       </header>
+
+      <SubscriptionEditor />
 
       {empty ? (
         <p className="rounded-2xl bg-paper px-4 py-10 text-center text-sm text-muted">

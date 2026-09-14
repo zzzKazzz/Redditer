@@ -31,7 +31,7 @@ app/                  画面と Reddit プロキシ
   interests/          好みの可視化
 components/           フィード UI
 lib/
-  subreddits.ts       取得対象 subreddit（追加・変更はここだけ）
+  subreddits.ts       購読の初期値・名前検証・localStorage
   reddit.ts           正規化とクライアント取得
   feed.ts             Hot / Top と期間
   db.ts               IndexedDB（Dexie）
@@ -60,9 +60,9 @@ Reddit から取得した表示用データ。主キーは投稿 `id`。再取�
 
 - `like` / `dislike` … 排他。同じボタンをもう一度押すと解除
 - `save` … トグル
-- `view` … カードが画面内に入った初回のみ
+- `view` … カードが画面内に入った初回のみ。Feed では取得開始時点の既読を外す（スクロール中は消さない）
 
-推薦に使うのは `like` と `dislike` だけです。`save` と `view` は将来用に残します。
+推薦に使うのは `like` と `dislike` だけです。`save` は保存タブ用です。
 
 ## 推薦スコアの仕組み
 
@@ -92,10 +92,10 @@ rankScore = (post.score / 1000)
 - RSS には upvote / コメント数が含まれない。取得順を保つため相対スコアだけ入れ、コメント数は 0 にする
 - Feed では Hot と Top を切り替えられる。Top は 1時間 / 24時間 / 1週間 / 1ヶ月 / 1年 / すべて
 - 認証・DB・業務ロジックは持たない
-- 対象 subreddit 以外は拒否する
+- subreddit 名は形式だけ検証する（2–21 文字、英数字と `_`）
 - 取得は 1 本ずつ＋短い間隔で、Reddit の 429 を避ける
 
-初期の取得対象（`lib/subreddits.ts`）:
+購読対象は興味タブで増減します。端末の `localStorage`（`redditer.subreddits`）に保存し、1–10 件です。未設定時の初期値（`lib/subreddits.ts`）:
 
 - r/all, r/AskReddit, r/technology, r/todayilearned, r/funny, r/worldnews
 
